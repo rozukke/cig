@@ -7,7 +7,7 @@ const Child = std.process.Child;
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
 
-pub const std_options = .{
+pub const std_options: std.Options = .{
     .logFn = log,
 };
 
@@ -25,14 +25,14 @@ pub fn log(
         // yellow
         .warn => .{ "\x1b[33m", "WRN" },
         // blank
-        .info => .{ "\x1b[0m", "INF" },
+        .info => .{ "", "INF" },
         // cyan
-        .debug => .{ "\x1b[36m", "DBG" },
+        .debug => .{ "\x1b[36;2m", "DBG" },
     };
 
     const prefix = color ++ "[" ++ lvl ++ "|" ++ @tagName(scope) ++ "] ";
 
-    std.io.getStdErr().writer().print(prefix ++ format ++ "\n", args) catch {
+    std.io.getStdErr().writer().print(prefix ++ format ++ "\n" ++ "\x1b[0m", args) catch {
         @panic("could not write log");
     };
 }
@@ -41,17 +41,15 @@ pub fn log(
 const driver_log = std.log.scoped(.DRIVER);
 
 pub fn main() !u8 {
-    const args = std.os.argv;
-    if (args.len < 2) {
-        driver_log.err("Please provide a C file to compile", .{});
-        return EXIT_ERR;
-    }
-    // Convert to []const u8
-    const rel_path = mem.span(args[1]);
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const alloc = gpa.allocator();
+
+    const config = util.processArgs() catch |err| {
+        driver_log.err("Args error: {s}", .{@errorName(err)});
+        return EXIT_ERR;
+    };
+    const rel_path = config.file;
 
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
@@ -64,7 +62,7 @@ pub fn main() !u8 {
     const preproc_file_name = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".i" }, 0);
     defer alloc.free(preproc_file_name);
 
-    driver_log.info("Calling preprocessor on file `{s}`", .{rel_path});
+    driver_log.info("Calling preprocessor on `{s}`", .{rel_path});
     const pre_proc = Child.run(.{
         .allocator = alloc,
         .argv = &.{
@@ -76,24 +74,40 @@ pub fn main() !u8 {
             preproc_file_name,
         },
     }) catch |err| {
-        driver_log.err("Could not run preprocessor on file {s}: {s}", .{ rel_path, @errorName(err) });
+        driver_log.err("Could not run preprocessor on `{s}`: {s}", .{ rel_path, @errorName(err) });
         return EXIT_ERR;
     };
     defer alloc.free(pre_proc.stdout);
     defer alloc.free(pre_proc.stderr);
 
     if (pre_proc.term.Exited == 1) {
-        driver_log.err("Command failed when preprocessing `{s}`:\n{s}", .{ rel_path, mem.trim(u8, pre_proc.stderr, "\n") });
+        driver_log.err("Command failed when preprocessing `{s}`\n{s}", .{ rel_path, mem.trim(u8, pre_proc.stderr, "\n") });
         std.process.exit(1);
         return EXIT_ERR;
     }
     defer {
-        driver_log.debug("Deleting file {s}", .{preproc_file_name});
+        driver_log.debug("Deleting `{s}`", .{preproc_file_name});
         std.fs.cwd().deleteFile(preproc_file_name) catch {};
     }
 
     // Compile
     _ = "TODO: Next up is the lexer";
+    if (config.lex) {
+        driver_log.warn("Stopping at lexing phase", .{});
+        return EXIT_OK;
+    }
+    if (config.parse) {
+        driver_log.warn("Stopping at parsing phase", .{});
+        return EXIT_OK;
+    }
+    if (config.codegen) {
+        driver_log.warn("Stopping at codegen phase", .{});
+        return EXIT_OK;
+    }
+    if (config.emit) {
+        driver_log.warn("Stopping at emission phase", .{});
+        return EXIT_OK;
+    }
 
     // Assemble
     const asm_file_name = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".s" }, 0);
@@ -106,18 +120,18 @@ pub fn main() !u8 {
         "-o",
         cfile_noext,
     } }) catch |err| {
-        driver_log.err("Could not run assembler on file {s}: {s}", .{ rel_path, @errorName(err) });
+        driver_log.err("Could not run assembler on `{s}`: {s}", .{ rel_path, @errorName(err) });
         return EXIT_ERR;
     };
     defer alloc.free(asm_proc.stdout);
     defer alloc.free(asm_proc.stderr);
 
     if (asm_proc.term.Exited == 1) {
-        driver_log.err("Could not assemble file `{s}`:\n{s}", .{ asm_file_name, mem.trim(u8, asm_proc.stderr, "\n") });
+        driver_log.err("Could not assemble file `{s}`\n{s}", .{ asm_file_name, mem.trim(u8, asm_proc.stderr, "\n") });
         return EXIT_ERR;
     }
     defer {
-        driver_log.debug("Deleting file {s}", .{asm_file_name});
+        driver_log.debug("Deleting `{s}`", .{asm_file_name});
         std.fs.cwd().deleteFile(asm_file_name) catch {};
     }
 
