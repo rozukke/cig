@@ -4,6 +4,11 @@ const mem = std.mem;
 const fs = std.fs;
 const Child = std.process.Child;
 
+// To run tests
+comptime {
+    _ = @import("ast.zig");
+}
+
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
 

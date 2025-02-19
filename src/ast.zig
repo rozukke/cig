@@ -117,11 +117,14 @@ pub const Tokenizer = struct {
     }
 };
 
-fn assertTokenize(src: [:0]const u8, tokens: []const Token) !void {
+fn assertTokenize(src: [:0]const u8, tokens: []const struct { Token, usize, usize }) !void {
     var tokenizer = Tokenizer.init(src);
     for (tokens) |expected| {
         const s_token = tokenizer.next();
-        try std.testing.expectEqual(s_token.tok, expected);
+        const exp_tok, const exp_start, const exp_end = expected;
+        try std.testing.expectEqual(exp_tok, s_token.tok);
+        try std.testing.expectEqual(exp_start, s_token.span.start);
+        try std.testing.expectEqual(exp_end, s_token.span.end);
     }
     const last = tokenizer.next();
     try std.testing.expectEqual(Token.eof, last.tok);
@@ -130,8 +133,9 @@ fn assertTokenize(src: [:0]const u8, tokens: []const Token) !void {
 }
 
 test "tokenize parens" {
-    try assertTokenize(" \n\t\r()", &.{
-        .l_paren,
-        .r_paren,
-    });
+    try assertTokenize(" \n\t\r()", &.{ .{ .l_paren, 4, 4 }, .{ .r_paren, 5, 5 } });
+}
+
+test "tokenize braces" {
+    try assertTokenize(" {\n\t\r}\n", &.{ .{ .l_brace, 1, 1 }, .{ .r_brace, 5, 5 } });
 }
