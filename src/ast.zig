@@ -23,7 +23,8 @@ const Token = enum {
     r_paren,
     l_brace,
     r_brace,
-    semi,
+    semicolon,
+    invalid,
     eof,
 };
 
@@ -56,6 +57,14 @@ pub const Tokenizer = struct {
         };
         state: switch (State.start) {
             .start => switch (self.src[self.idx]) {
+                0 => {
+                    if (self.idx == self.src.len) {
+                        return .{ .tok = .eof, .span = .{
+                            .start = self.idx,
+                            .end = self.idx,
+                        } };
+                    }
+                },
                 ' ', '\n', '\t', '\r' => {
                     self.idx += 1;
                     result.span.start = self.idx;
@@ -69,14 +78,41 @@ pub const Tokenizer = struct {
                     self.idx += 1;
                     result.tok = .r_paren;
                 },
+                '{' => {
+                    self.idx += 1;
+                    result.tok = .l_brace;
+                },
+                '}' => {
+                    self.idx += 1;
+                    result.tok = .r_brace;
+                },
+                ';' => {
+                    self.idx += 1;
+                    result.tok = .semicolon;
+                },
                 else => {
                     result.tok = .eof;
                 },
+            },
+            .invalid => {
+                self.idx += 1;
+                // Continue invalid token until eof or newline
+                switch (self.src[self.idx]) {
+                    0 => if (self.idx == self.src.len) {
+                        result.tok = .invalid;
+                    } else {
+                        continue :state .invalid;
+                    },
+                    '\n' => result.tok = .invalid,
+                    else => continue :state .invalid,
+                }
             },
             else => {
                 result.tok = .eof;
             },
         }
+
+        result.span.end = self.idx;
         return result;
     }
 };
