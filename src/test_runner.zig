@@ -1,15 +1,12 @@
 // Taken from karlseguin's gist because the default testing experience is MEGA ASS
 
-// in your build.zig, you can specify a custom test runner:
-// const tests = b.addTest(.{
-//   .target = target,
-//   .optimize = optimize,
-//   .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple }, // add this line
-//   .root_source_file = b.path("src/main.zig"),
-// });
-
 const std = @import("std");
 const builtin = @import("builtin");
+const log = @import("main.zig").log;
+
+pub const std_options = std.Options{
+    .logFn = log,
+};
 
 const Allocator = std.mem.Allocator;
 
