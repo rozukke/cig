@@ -4,15 +4,12 @@ const mem = std.mem;
 const fs = std.fs;
 const Child = std.process.Child;
 
-// To run tests
-comptime {
-    _ = @import("ast.zig");
-}
+const lex = @import("lex.zig");
 
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
 
-pub const std_options: std.Options = .{
+pub const std_options = std.Options{
     .logFn = log,
 };
 
@@ -64,8 +61,8 @@ pub fn main() !u8 {
     const cfile_noext = util.pathNoExt(rel_path);
 
     // Preprocess
-    const preproc_file_name = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".i" }, 0);
-    defer alloc.free(preproc_file_name);
+    const preproc_file_path = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".i" }, 0);
+    defer alloc.free(preproc_file_path);
 
     driver_log.info("Calling preprocessor on `{s}`", .{rel_path});
     const pre_proc = Child.run(.{
@@ -76,7 +73,7 @@ pub fn main() !u8 {
             "-P",
             rel_path,
             "-o",
-            preproc_file_name,
+            preproc_file_path,
         },
     }) catch |err| {
         driver_log.err("Could not run preprocessor on `{s}`: {s}", .{ rel_path, @errorName(err) });
@@ -91,12 +88,30 @@ pub fn main() !u8 {
         return EXIT_ERR;
     }
     defer {
-        driver_log.debug("Deleting `{s}`", .{preproc_file_name});
-        std.fs.cwd().deleteFile(preproc_file_name) catch {};
+        driver_log.debug("Deleting `{s}`", .{preproc_file_path});
+        std.fs.cwd().deleteFile(preproc_file_path) catch {};
     }
 
+    // Read preprocessed file
+    const cwd = std.fs.cwd();
+    // Supports 10MB files I suppose?
+    const src = try cwd.readFileAllocOptions(alloc, preproc_file_path, 10_000_000, null, 1, 0);
+    defer alloc.free(src);
+
     // Compile
-    _ = "TODO: Next up is the lexer";
+    var tokenizer = lex.Tokenizer.init(src);
+    while (true) {
+        const tok = tokenizer.next();
+        switch (tok.tok) {
+            .invalid => {
+                return EXIT_ERR;
+            },
+            .eof => {
+                break;
+            },
+            else => {},
+        }
+    }
     if (config.lex) {
         driver_log.warn("Stopping at lexing phase", .{});
         return EXIT_OK;

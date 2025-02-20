@@ -1,7 +1,4 @@
 const std = @import("std");
-const unicode = std.unicode;
-
-const Ast = union(enum) {};
 
 /// Token with source info
 const SourceToken = struct {
@@ -64,6 +61,15 @@ pub const Tokenizer = struct {
         return self.src[self.idx];
     }
 
+    inline fn bump(self: *Tokenizer) u8 {
+        self.idx += 1;
+        return self.curr();
+    }
+
+    inline fn peek(self: *Tokenizer) u8 {
+        return self.src[self.idx + 1];
+    }
+
     pub fn next(self: *Tokenizer) SourceToken {
         var result: SourceToken = .{
             .tok = undefined,
@@ -116,25 +122,23 @@ pub const Tokenizer = struct {
                     self.idx += 1;
                 },
                 else => {
-                    result.tok = .eof;
+                    continue :state .invalid;
                 },
             },
             .invalid => {
-                self.idx += 1;
                 // Continue invalid token until eof or newline
-                switch (self.curr()) {
+                switch (self.bump()) {
                     0 => if (self.idx == self.src.len) {
                         result.tok = .invalid;
                     } else {
                         continue :state .invalid;
                     },
-                    '\n' => result.tok = .invalid,
+                    ' ', '\n', '\t', '\r' => result.tok = .invalid,
                     else => continue :state .invalid,
                 }
             },
             .identifier => {
-                self.idx += 1;
-                switch (self.curr()) {
+                switch (self.bump()) {
                     'a'...'z', 'A'...'Z', '_', '0'...'9' => {
                         continue :state .identifier;
                     },
@@ -147,10 +151,12 @@ pub const Tokenizer = struct {
                 }
             },
             .constant => {
-                self.idx += 1;
-                switch (self.curr()) {
-                    '0'...'9', '_' => {
+                switch (self.bump()) {
+                    '0'...'9' => {
                         continue :state .constant;
+                    },
+                    '_', 'a'...'z', 'A'...'Z' => {
+                        continue :state .invalid;
                     },
                     else => {},
                 }
@@ -194,7 +200,7 @@ test "keywords" {
 }
 
 test "identifiers" {
-    try assertTokenize("ints voids returns", &.{
+    try assertTokenize("_int void9 r3turn_", &.{
         .{ .identifier, 0, 4 },
         .{ .identifier, 5, 10 },
         .{ .identifier, 11, 18 },
@@ -202,14 +208,16 @@ test "identifiers" {
 }
 
 test "bom" {
-    try assertTokenize("\xEF\xBB\xBFint", &.{.{ .kw_int, 3, 6 }});
+    try assertTokenize("\xEF\xBB\xBFints", &.{.{ .identifier, 3, 7 }});
 }
 
 test "int constant" {
-    try assertTokenize("1 33 3_000_000", &.{
+    try assertTokenize("1 23 3456789 123_ 4e5", &.{
         .{ .int_constant, 0, 1 },
         .{ .int_constant, 2, 4 },
-        .{ .int_constant, 5, 14 },
+        .{ .int_constant, 5, 12 },
+        .{ .invalid, 13, 17 },
+        .{ .invalid, 18, 21 },
     });
 }
 
