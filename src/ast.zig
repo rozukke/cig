@@ -178,9 +178,57 @@ fn assertTokenize(src: [:0]const u8, tokens: []const struct { Token, usize, usiz
 }
 
 test "tokenize parens" {
-    try assertTokenize(" \n\t\r()", &.{ .{ .l_paren, 4, 4 }, .{ .r_paren, 5, 5 } });
+    try assertTokenize(" \n\t\r()", &.{ .{ .l_paren, 4, 5 }, .{ .r_paren, 5, 6 } });
 }
 
 test "tokenize braces" {
-    try assertTokenize(" {\n\t\r}\n", &.{ .{ .l_brace, 1, 1 }, .{ .r_brace, 5, 5 } });
+    try assertTokenize(" {\n\t\r}\n", &.{ .{ .l_brace, 1, 2 }, .{ .r_brace, 5, 6 } });
+}
+
+test "keywords" {
+    try assertTokenize("int void return", &.{
+        .{ .kw_int, 0, 3 },
+        .{ .kw_void, 4, 8 },
+        .{ .kw_return, 9, 15 },
+    });
+}
+
+test "identifiers" {
+    try assertTokenize("ints voids returns", &.{
+        .{ .identifier, 0, 4 },
+        .{ .identifier, 5, 10 },
+        .{ .identifier, 11, 18 },
+    });
+}
+
+test "bom" {
+    try assertTokenize("\xEF\xBB\xBFint", &.{.{ .kw_int, 3, 6 }});
+}
+
+test "int constant" {
+    try assertTokenize("1 33 3_000_000", &.{
+        .{ .int_constant, 0, 1 },
+        .{ .int_constant, 2, 4 },
+        .{ .int_constant, 5, 14 },
+    });
+}
+
+test "small program" {
+    const program =
+        \\int main(void) {
+        \\    return 2;
+        \\}
+    ;
+    try assertTokenize(program, &.{
+        .{ .kw_int, 0, 3 },
+        .{ .identifier, 4, 8 },
+        .{ .l_paren, 8, 9 },
+        .{ .kw_void, 9, 13 },
+        .{ .r_paren, 13, 14 },
+        .{ .l_brace, 15, 16 },
+        .{ .kw_return, 21, 27 },
+        .{ .int_constant, 28, 29 },
+        .{ .semicolon, 29, 30 },
+        .{ .r_brace, 31, 32 },
+    });
 }
