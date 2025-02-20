@@ -16,9 +16,11 @@ const Span = struct {
 
 /// Enum representing C keywords
 const Token = enum {
-    int,
-    return_kw,
-    void,
+    identifier,
+    int_constant,
+    kw_int,
+    kw_return,
+    kw_void,
     l_paren,
     r_paren,
     l_brace,
@@ -26,6 +28,16 @@ const Token = enum {
     semicolon,
     invalid,
     eof,
+
+    pub const keywords = std.StaticStringMap(Token).initComptime(.{
+        .{ "int", .kw_int },
+        .{ "return", .kw_return },
+        .{ "void", .kw_void },
+    });
+
+    pub fn getKeyword(slice: []const u8) ?Token {
+        return keywords.get(slice);
+    }
 };
 
 // Kind of aped from the Zig tokenizer
@@ -36,6 +48,7 @@ pub const Tokenizer = struct {
     const State = enum {
         start,
         identifier,
+        constant,
         invalid,
     };
 
@@ -47,48 +60,60 @@ pub const Tokenizer = struct {
         };
     }
 
+    inline fn curr(self: *Tokenizer) u8 {
+        return self.src[self.idx];
+    }
+
     pub fn next(self: *Tokenizer) SourceToken {
         var result: SourceToken = .{
             .tok = undefined,
             .span = .{
                 .start = self.idx,
-                .end = self.idx,
+                .end = undefined,
             },
         };
         state: switch (State.start) {
-            .start => switch (self.src[self.idx]) {
+            .start => switch (self.curr()) {
                 0 => {
                     if (self.idx == self.src.len) {
                         return .{ .tok = .eof, .span = .{
                             .start = self.idx,
                             .end = self.idx,
                         } };
-                    }
+                    } else continue :state .invalid;
                 },
                 ' ', '\n', '\t', '\r' => {
                     self.idx += 1;
                     result.span.start = self.idx;
                     continue :state .start;
                 },
+                'a'...'z', 'A'...'Z', '_' => {
+                    result.tok = .identifier;
+                    continue :state .identifier;
+                },
+                '0'...'9' => {
+                    result.tok = .int_constant;
+                    continue :state .constant;
+                },
                 '(' => {
-                    self.idx += 1;
                     result.tok = .l_paren;
+                    self.idx += 1;
                 },
                 ')' => {
-                    self.idx += 1;
                     result.tok = .r_paren;
+                    self.idx += 1;
                 },
                 '{' => {
-                    self.idx += 1;
                     result.tok = .l_brace;
+                    self.idx += 1;
                 },
                 '}' => {
-                    self.idx += 1;
                     result.tok = .r_brace;
+                    self.idx += 1;
                 },
                 ';' => {
-                    self.idx += 1;
                     result.tok = .semicolon;
+                    self.idx += 1;
                 },
                 else => {
                     result.tok = .eof;
@@ -97,7 +122,7 @@ pub const Tokenizer = struct {
             .invalid => {
                 self.idx += 1;
                 // Continue invalid token until eof or newline
-                switch (self.src[self.idx]) {
+                switch (self.curr()) {
                     0 => if (self.idx == self.src.len) {
                         result.tok = .invalid;
                     } else {
@@ -107,8 +132,28 @@ pub const Tokenizer = struct {
                     else => continue :state .invalid,
                 }
             },
-            else => {
-                result.tok = .eof;
+            .identifier => {
+                self.idx += 1;
+                switch (self.curr()) {
+                    'a'...'z', 'A'...'Z', '_', '0'...'9' => {
+                        continue :state .identifier;
+                    },
+                    else => {
+                        const ident = self.src[result.span.start..self.idx];
+                        if (Token.getKeyword(ident)) |tok| {
+                            result.tok = tok;
+                        }
+                    },
+                }
+            },
+            .constant => {
+                self.idx += 1;
+                switch (self.curr()) {
+                    '0'...'9', '_' => {
+                        continue :state .constant;
+                    },
+                    else => {},
+                }
             },
         }
 
