@@ -142,3 +142,7 @@ pub fn main() !u8 {
 
     return EXIT_OK;
 }
+
+test "Test runner" {
+    std.testing.refAllDecls(@This());
+}
