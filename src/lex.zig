@@ -1,7 +1,7 @@
 const std = @import("std");
 
 /// Token with source info
-const SourceToken = struct {
+pub const SourceToken = struct {
     tok: Token,
     span: Span,
 };
@@ -9,10 +9,14 @@ const SourceToken = struct {
 const Span = struct {
     start: usize,
     end: usize,
+
+    pub fn toSrcSlice(self: Span, src: []const u8) []const u8 {
+        return src[self.start..self.end];
+    }
 };
 
 /// Enum representing C keywords
-const Token = enum {
+pub const Token = enum {
     identifier,
     int_constant,
     kw_int,

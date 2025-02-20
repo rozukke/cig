@@ -5,6 +5,7 @@ const fs = std.fs;
 const Child = std.process.Child;
 
 const lex = @import("lex.zig");
+const ast = @import("ast.zig");
 
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
@@ -98,24 +99,27 @@ pub fn main() !u8 {
     const src = try cwd.readFileAllocOptions(alloc, preproc_file_path, 10_000_000, null, 1, 0);
     defer alloc.free(src);
 
-    // Compile
+    // Lexing
     var tokenizer = lex.Tokenizer.init(src);
-    while (true) {
-        const tok = tokenizer.next();
-        switch (tok.tok) {
-            .invalid => {
-                return EXIT_ERR;
-            },
-            .eof => {
-                break;
-            },
-            else => {},
-        }
-    }
     if (config.lex) {
+        while (true) {
+            const tok = tokenizer.next();
+            switch (tok.tok) {
+                .invalid => {
+                    return EXIT_ERR;
+                },
+                .eof => {
+                    break;
+                },
+                else => {},
+            }
+        }
         driver_log.warn("Stopping at lexing phase", .{});
         return EXIT_OK;
     }
+    var parser = ast.Parser.init(&tokenizer);
+    const ast_res = parser.tryParse() catch return EXIT_ERR;
+    _ = ast_res;
     if (config.parse) {
         driver_log.warn("Stopping at parsing phase", .{});
         return EXIT_OK;
