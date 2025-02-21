@@ -18,7 +18,7 @@
 # cig
 
 The coolest C compiler in town... he even smokes.  
-Built by following Nora Sandler's "Writing a C Compiler" book and using Zig.
+Built by following Nora Sandler's "Writing a C Compiler" book using Zig.
 
 ## Usage
 To run on a C source file, you can use the below command:
@@ -27,19 +27,20 @@ To run on a C source file, you can use the below command:
 zig build run -- source.c
 
 ```
-
-I don't know how the build system works properly yet, but once I do this will be nicer.
+Below commands are available to test separate compiler stages:
+- `--lex`: stop at lexing
+- `--parse`: stop at parsing
+- `--codegen`: stop at codegen
+- `-S`: emit assembly but do not assemble
 
 ## Other stuff
-Next on the list:
-- Argument parsing & flags
-- Lexing
-
-TODO: Make this file look good
+Next on the list is the end of Chapter 1:
+- Assembly emission
+- Reference assembly AST from zig compiler
 
 ## LICENSE
-See LICENSE file.  
-Copyright © 2025 Artemis Rosman
+**See LICENSE file.**  
+**Copyright © 2025 Artemis Rosman**
 
 Header ASCII art by Normand Veilleux.
 
