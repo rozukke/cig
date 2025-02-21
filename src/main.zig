@@ -6,6 +6,7 @@ const Child = std.process.Child;
 
 const lex = @import("lex.zig");
 const ast = @import("ast.zig");
+const asmtree = @import("asmtree.zig");
 
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
@@ -118,7 +119,8 @@ pub fn main() !u8 {
         return EXIT_OK;
     }
     var parser = ast.Parser.init(&tokenizer);
-    const ast_res = parser.tryParse() catch return EXIT_ERR;
+    defer parser.deinit();
+    const ast_res = try parser.parse();
     _ = ast_res;
     if (config.parse) {
         driver_log.warn("Stopping at parsing phase", .{});
@@ -163,5 +165,6 @@ pub fn main() !u8 {
 }
 
 test "Test runner" {
+    _ = asmtree;
     std.testing.refAllDecls(@This());
 }
