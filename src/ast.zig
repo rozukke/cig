@@ -5,43 +5,54 @@ const lex = @import("lex.zig");
 const ast_log = std.log.scoped(.PARSE);
 
 /// Root node of the C AST
-const Ast = union(enum) {
+pub const Ast = union(enum) {
     function: Function,
 };
 
 /// Basic function AST node
-const Function = struct {
+pub const Function = struct {
     /// function name
     identifier: []const u8,
     /// function body
-    body: Statement,
+    body: std.ArrayList(Statement),
 };
 
 /// AST node for a singular line of C source text deliniated by a semicolon
-const Statement = union(enum) {
+pub const Statement = union(enum) {
     /// return statement
     st_return: Expr,
 };
 
 /// AST node for an evaluatable expression
-const Expr = union(enum) {
+pub const Expr = union(enum) {
     /// int
     constant: i32,
 };
 
 const ParseErr = error{
     UnexpectedToken,
+    InvalidConstant,
+    OutOfMemory,
 };
 
 pub const Parser = struct {
     tokenizer: *lex.Tokenizer,
     src: []const u8,
+    arena: std.heap.ArenaAllocator,
+    alloc: mem.Allocator,
 
     pub fn init(tokenizer: *lex.Tokenizer) Parser {
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         return .{
             .tokenizer = tokenizer,
             .src = tokenizer.src,
+            .arena = arena,
+            .alloc = arena.allocator(),
         };
+    }
+
+    pub fn deinit(self: *Parser) void {
+        self.arena.deinit();
     }
 
     fn next(self: *Parser) lex.SourceToken {
@@ -76,7 +87,10 @@ pub const Parser = struct {
         try self.expectSemantic(.kw_void);
         try self.expectSemantic(.r_paren);
         try self.expectSemantic(.l_brace);
-        const body = try self.expectStatement();
+        const body_stmt = try self.expectStatement();
+        // Needs alloc
+        var body = std.ArrayList(Statement).init(self.alloc);
+        body.append(body_stmt) catch return ParseErr.OutOfMemory;
         try self.expectSemantic(.r_brace);
 
         return Function{
@@ -94,12 +108,13 @@ pub const Parser = struct {
     }
 
     fn expectExpr(self: *Parser) ParseErr!Expr {
-        // TODO: This does not parse numeric value
-        try self.expectSemantic(.int_constant);
-        return Expr{ .constant = 2 };
+        const int_tok = try self.expect(.int_constant);
+        const tok_span = int_tok.span.toSrcSlice(self.src);
+        const parsed_int = std.fmt.parseInt(i32, tok_span, 10) catch return ParseErr.InvalidConstant;
+        return Expr{ .constant = parsed_int };
     }
 
-    pub fn tryParse(self: *Parser) ParseErr!Ast {
+    pub fn parse(self: *Parser) ParseErr!Ast {
         const func: Function = try self.expectFn();
         try self.expectSemantic(.eof);
         return Ast{ .function = func };
@@ -114,7 +129,17 @@ test "parse small program" {
     ;
     var tokenizer = lex.Tokenizer.init(program);
     var parser = Parser.init(&tokenizer);
-    const ast = try parser.tryParse();
+    const ast = try parser.parse();
 
     try std.testing.expect(mem.eql(u8, ast.function.identifier, "foock"));
+}
+
+test "parse expression" {
+    var tokenizer = lex.Tokenizer.init("return 25;");
+    var parser = Parser.init(&tokenizer);
+    const stmt = try parser.expectStatement();
+
+    switch (stmt) {
+        .st_return => |expr| try std.testing.expect(expr.constant == 25),
+    }
 }
