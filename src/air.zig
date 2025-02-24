@@ -12,10 +12,6 @@ pub fn emitToFile(air_in: Air, writer: std.io.AnyWriter) !void {
 
 const Program = struct {
     function: Function,
-
-    pub fn toAsm(self: *Program) []const u8 {
-        return self.function.toAsm();
-    }
 };
 
 const Function = struct {
@@ -32,7 +28,7 @@ const Function = struct {
             try instr.writeAsm(writer);
         }
 
-        // Required prologue for non-executable stack
+        // Required prologue on linux for non-executable stack
         if (!is_mac) _ = try writer.write(".section .note.GNU-stack,\"\",@progbits");
     }
 };
@@ -44,9 +40,11 @@ const Instruction = union(enum) {
     pub fn writeAsm(self: Instruction, writer: std.io.AnyWriter) !void {
         switch (self) {
             .mov => |srcdest| {
-                var src_buf: [32]u8 = undefined;
-                var dest_buf: [32]u8 = undefined;
-                try writer.print("\tmovl\t{s},{s}\n", .{ try srcdest.src.writeToBuf(&src_buf), try srcdest.dest.writeToBuf(&dest_buf) });
+                _ = try writer.write("\tmovl\t");
+                try srcdest.src.writeAsm(writer);
+                _ = try writer.write(", ");
+                try srcdest.dest.writeAsm(writer);
+                _ = try writer.write("\n");
             },
             .ret => {
                 _ = try writer.write("\tret\n");
@@ -64,13 +62,13 @@ const Operand = union(enum) {
     imm: i32,
     reg: Register,
 
-    pub fn writeToBuf(self: Operand, buffer: []u8) ![]const u8 {
+    pub fn writeAsm(self: Operand, writer: std.io.AnyWriter) !void {
         switch (self) {
             .imm => |val| {
-                return try std.fmt.bufPrint(buffer, "${d}", .{val});
+                try writer.print("${d}", .{val});
             },
             .reg => |reg| {
-                return reg.toSlice();
+                _ = try writer.write(reg.toSlice());
             },
         }
     }
@@ -98,6 +96,7 @@ pub const Air = struct {
         };
     }
 
+    /// Destroys underlying arena allocator
     pub fn deinit(self: *Air) void {
         self.arena.deinit();
     }
@@ -112,11 +111,11 @@ pub const Air = struct {
     fn processRoot(self: *Air, function: ast.Function) !void {
         const instructions = try self.convertFnBody(function.body);
         std.debug.assert(instructions.getLast() == .ret);
-        const processed_functinon = Function{
+        const processed_function = Function{
             .name = function.identifier,
             .instructions = instructions,
         };
-        self.function = processed_functinon;
+        self.function = processed_function;
     }
 
     fn convertFnBody(self: *Air, body: std.ArrayList(ast.Statement)) !std.ArrayList(Instruction) {
