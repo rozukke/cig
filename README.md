@@ -36,10 +36,11 @@ Below commands are available to test separate compiler stages:
 - `--codegen`: stop at codegen
 - `-S`: emit assembly but do not assemble
 
-## Other stuff
-Next on the list is the end of Chapter 1:
-- Assembly emission
-- Reference assembly AST from zig compiler
+## Progress
+Currently finished with Chapter 1, meaning that the compiler can currently:
+- Compile programs that can return an integer in a single top level main function
+- Detect syntax and language errors related to the above
+- Display basic error messages
 
 ## LICENSE
 **See LICENSE file.**  
