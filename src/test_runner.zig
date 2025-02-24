@@ -2,10 +2,10 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const log = @import("main.zig").log;
+const prettyLog = @import("log.zig").prettyLog;
 
 pub const std_options = std.Options{
-    .logFn = log,
+    .logFn = prettyLog,
 };
 
 const Allocator = std.mem.Allocator;

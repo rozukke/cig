@@ -4,6 +4,8 @@ const mem = std.mem;
 const fs = std.fs;
 const Child = std.process.Child;
 
+const log = @import("log.zig");
+
 const lex = @import("lex.zig");
 const ast = @import("ast.zig");
 const asmtree = @import("asmtree.zig");
@@ -12,37 +14,10 @@ const EXIT_ERR = 1;
 const EXIT_OK = 0;
 
 pub const std_options = std.Options{
-    .logFn = log,
+    .logFn = log.prettyLog,
 };
 
-/// Custom log function for pretty formatting and colors
-pub fn log(
-    comptime level: std.log.Level,
-    comptime scope: @TypeOf(.EnumLiteral),
-    comptime format: []const u8,
-    args: anytype,
-) void {
-    // Formatting options
-    const color, const lvl = switch (level) {
-        // red
-        .err => .{ "\x1b[31m", "ERR" },
-        // yellow
-        .warn => .{ "\x1b[33m", "WRN" },
-        // blank
-        .info => .{ "", "INF" },
-        // cyan
-        .debug => .{ "\x1b[36;2m", "DBG" },
-    };
-
-    const prefix = color ++ "[" ++ lvl ++ "|" ++ @tagName(scope) ++ "] ";
-
-    std.io.getStdErr().writer().print(prefix ++ format ++ "\n" ++ "\x1b[0m", args) catch {
-        @panic("could not write log");
-    };
-}
-
-/// Logger for compiler driver
-const driver_log = std.log.scoped(.DRIVER);
+const driver_log = log.driver_log;
 
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -54,12 +29,6 @@ pub fn main() !u8 {
         return EXIT_ERR;
     };
     const rel_path = config.file;
-
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
-    _ = stdout;
-
     const cfile_noext = util.pathNoExt(rel_path);
 
     // Preprocess
@@ -85,10 +54,11 @@ pub fn main() !u8 {
     defer alloc.free(pre_proc.stderr);
 
     if (pre_proc.term.Exited == 1) {
-        driver_log.err("Command failed when preprocessing `{s}`\n{s}", .{ rel_path, mem.trim(u8, pre_proc.stderr, "\n") });
+        driver_log.err("Command failed when preprocessing `{s}`, output included below\n{s}", .{ rel_path, mem.trim(u8, pre_proc.stderr, "\n") });
         std.process.exit(1);
         return EXIT_ERR;
     }
+    // Only defer if gcc ran successfully
     defer {
         driver_log.debug("Deleting `{s}`", .{preproc_file_path});
         std.fs.cwd().deleteFile(preproc_file_path) catch {};
@@ -96,13 +66,14 @@ pub fn main() !u8 {
 
     // Read preprocessed file
     const cwd = std.fs.cwd();
-    // Supports 10MB files I suppose?
-    const src = try cwd.readFileAllocOptions(alloc, preproc_file_path, 10_000_000, null, 1, 0);
+    // Supports 5MB files I suppose?
+    const src = try cwd.readFileAllocOptions(alloc, preproc_file_path, 5_000_000, null, 1, 0);
     defer alloc.free(src);
 
     // Lexing
     var tokenizer = lex.Tokenizer.init(src);
     if (config.lex) {
+        // Exhaust iterator
         while (true) {
             const tok = tokenizer.next();
             switch (tok.tok) {
@@ -165,6 +136,7 @@ pub fn main() !u8 {
 }
 
 test "Test runner" {
-    _ = asmtree;
-    std.testing.refAllDecls(@This());
+    _ = lex;
+    _ = ast;
+    _ = air;
 }
