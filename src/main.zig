@@ -8,7 +8,7 @@ const log = @import("log.zig");
 
 const lex = @import("lex.zig");
 const ast = @import("ast.zig");
-const asmtree = @import("asmtree.zig");
+const air = @import("air.zig");
 
 const EXIT_ERR = 1;
 const EXIT_OK = 0;
@@ -89,27 +89,43 @@ pub fn main() !u8 {
         driver_log.warn("Stopping at lexing phase", .{});
         return EXIT_OK;
     }
+
+    // Parsing
     var parser = ast.Parser.init(&tokenizer);
     defer parser.deinit();
     const ast_res = try parser.parse();
-    _ = ast_res;
     if (config.parse) {
         driver_log.warn("Stopping at parsing phase", .{});
         return EXIT_OK;
     }
+
+    // Codegen
+    const asm_tree = try air.Air.from(ast_res);
     if (config.codegen) {
         driver_log.warn("Stopping at codegen phase", .{});
         return EXIT_OK;
     }
+
+    // Code emit
+    const asm_file_name = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".s" }, 0);
+    defer alloc.free(asm_file_name);
+
+    var asm_file = try cwd.createFile(asm_file_name, .{});
+    defer asm_file.close();
+
+    var buf_writer = std.io.bufferedWriter(asm_file.writer());
+    const asm_file_writer = buf_writer.writer().any();
+    try air.emitToFile(asm_tree, asm_file_writer);
+
+    // Have to do this or file output will break
+    try buf_writer.flush();
+
     if (config.emit) {
         driver_log.warn("Stopping at emission phase", .{});
         return EXIT_OK;
     }
 
-    // Assemble
-    const asm_file_name = try mem.concatWithSentinel(alloc, u8, &.{ cfile_noext, ".s" }, 0);
-    defer alloc.free(asm_file_name);
-
+    // Assemble (external)
     driver_log.info("Calling assembler on file `{s}`", .{asm_file_name});
     const asm_proc = Child.run(.{ .allocator = alloc, .argv = &.{
         "gcc",

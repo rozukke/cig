@@ -7,8 +7,6 @@ pub fn pathNoExt(path: []const u8) []const u8 {
     return path[0 .. path.len - stdpath.extension(path).len];
 }
 
-const arg_iter = @import("std").process.ArgIterator;
-
 const Config = struct {
     file: []const u8 = undefined,
     lex: bool = false,

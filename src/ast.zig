@@ -39,15 +39,12 @@ pub const Parser = struct {
     tokenizer: *lex.Tokenizer,
     src: []const u8,
     arena: std.heap.ArenaAllocator,
-    alloc: mem.Allocator,
 
     pub fn init(tokenizer: *lex.Tokenizer) Parser {
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         return .{
             .tokenizer = tokenizer,
             .src = tokenizer.src,
-            .arena = arena,
-            .alloc = arena.allocator(),
+            .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
         };
     }
 
@@ -89,7 +86,7 @@ pub const Parser = struct {
         try self.expectSemantic(.l_brace);
         const body_stmt = try self.expectStatement();
         // Needs alloc
-        var body = std.ArrayList(Statement).init(self.alloc);
+        var body = std.ArrayList(Statement).init(self.arena.allocator());
         body.append(body_stmt) catch return ParseErr.OutOfMemory;
         try self.expectSemantic(.r_brace);
 
