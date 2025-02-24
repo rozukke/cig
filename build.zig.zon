@@ -7,9 +7,6 @@
 
     .version = "0.0.0",
 
-    // This field is optional.
-    // This is currently advisory only; Zig does not yet do anything
-    // with this value.
     .minimum_zig_version = "0.13.0",
 
     // This field is optional.
