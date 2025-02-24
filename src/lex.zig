@@ -26,6 +26,9 @@ pub const Token = enum {
     r_paren,
     l_brace,
     r_brace,
+    tilde,
+    minus,
+    decrement,
     semicolon,
     invalid,
     eof,
@@ -50,6 +53,7 @@ pub const Tokenizer = struct {
         start,
         identifier,
         constant,
+        minus,
         invalid,
     };
 
@@ -121,6 +125,14 @@ pub const Tokenizer = struct {
                     result.tok = .r_brace;
                     self.idx += 1;
                 },
+                '-' => {
+                    result.tok = .minus;
+                    continue :state .minus;
+                },
+                '~' => {
+                    result.tok = .tilde;
+                    self.idx += 1;
+                },
                 ';' => {
                     result.tok = .semicolon;
                     self.idx += 1;
@@ -160,6 +172,14 @@ pub const Tokenizer = struct {
                         continue :state .constant;
                     },
                     '_', 'a'...'z', 'A'...'Z' => {
+                        continue :state .invalid;
+                    },
+                    else => {},
+                }
+            },
+            .minus => {
+                switch (self.bump()) {
+                    '-' => {
                         continue :state .invalid;
                     },
                     else => {},
