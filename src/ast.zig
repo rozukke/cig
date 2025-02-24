@@ -23,14 +23,27 @@ pub const Statement = union(enum) {
     st_return: Expr,
 };
 
+pub const UnaryOp = enum {
+    negate,
+    bitwise_not,
+};
+
+/// AST node for unary expression, e.g. -2 or ~5
+pub const Unary = struct {
+    op: UnaryOp,
+    expr: Expr,
+};
+
 /// AST node for an evaluatable expression
 pub const Expr = union(enum) {
     /// int
     constant: i32,
+    unary: *Unary,
 };
 
 const ParseErr = error{
     UnexpectedToken,
+    UnexpectedExpression,
     InvalidConstant,
     OutOfMemory,
 };
@@ -56,6 +69,10 @@ pub const Parser = struct {
         return self.tokenizer.next();
     }
 
+    fn peek(self: *Parser) lex.Token {
+        return self.tokenizer.peek_tok();
+    }
+
     fn expect(self: *Parser, tok: lex.Token) ParseErr!lex.SourceToken {
         const s_tok = self.next();
         if (tok == s_tok.tok) {
@@ -73,6 +90,10 @@ pub const Parser = struct {
 
     fn logUnexpected(expected: lex.Token, actual: lex.Token) void {
         ast_log.err("Expected {}, found {}", .{ expected, actual });
+    }
+
+    fn logUnexpectedConstruct(comptime expected: []const u8, actual: lex.Token) void {
+        ast_log.err("Expected {s}, found {}", .{ expected, actual });
     }
 
     // TODO: Display line on which error occured as well as pointer to token start
@@ -105,10 +126,33 @@ pub const Parser = struct {
     }
 
     fn expectExpr(self: *Parser) ParseErr!Expr {
-        const int_tok = try self.expect(.int_constant);
-        const tok_span = int_tok.span.toSrcSlice(self.src);
-        const parsed_int = std.fmt.parseInt(i32, tok_span, 10) catch return ParseErr.InvalidConstant;
-        return Expr{ .constant = parsed_int };
+        const next_tok = self.next();
+        switch (next_tok.tok) {
+            .minus, .tilde => {
+                var unary = try self.arena.allocator().create(Unary);
+                unary.op = switch (next_tok.tok) {
+                    .minus => .negate,
+                    .tilde => .bitwise_not,
+                    else => unreachable,
+                };
+                unary.expr = try self.expectExpr();
+                return .{ .unary = unary };
+            },
+            .int_constant => {
+                const tok_span = next_tok.span.toSrcSlice(self.src);
+                const parsed_int = std.fmt.parseInt(i32, tok_span, 10) catch return ParseErr.InvalidConstant;
+                return .{ .constant = parsed_int };
+            },
+            .l_paren => {
+                const expr = self.expectExpr();
+                try self.expectSemantic(.r_paren);
+                return expr;
+            },
+            else => |tok| {
+                logUnexpectedConstruct("expression", tok);
+                return ParseErr.UnexpectedExpression;
+            },
+        }
     }
 
     pub fn parse(self: *Parser) ParseErr!Ast {
@@ -138,5 +182,29 @@ test "parse expression" {
 
     switch (stmt) {
         .st_return => |expr| try std.testing.expect(expr.constant == 25),
+    }
+}
+
+// TODO: This is horrible. Zig avoids its shortcomings by testing through the formatter, but I'm not sure that's sane.
+test "parse unary" {
+    var tokenizer = lex.Tokenizer.init("~(-25)");
+    var parser = Parser.init(&tokenizer);
+    const expr = try parser.expectExpr();
+
+    switch (expr) {
+        .unary => |unary| {
+            switch (unary.expr) {
+                .unary => |unary2| {
+                    switch (unary2.expr) {
+                        .constant => |val| {
+                            try std.testing.expect(val == 25);
+                        },
+                        else => unreachable,
+                    }
+                },
+                else => unreachable,
+            }
+        },
+        else => unreachable,
     }
 }

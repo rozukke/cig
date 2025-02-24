@@ -143,6 +143,7 @@ pub const Air = struct {
             .constant => |val| {
                 return .{ .imm = val };
             },
+            else => return .{ .imm = 0 },
         }
     }
 };

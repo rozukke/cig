@@ -78,6 +78,11 @@ pub const Tokenizer = struct {
         return self.src[self.idx + 1];
     }
 
+    pub fn peek_tok(self: *Tokenizer) Token {
+        var self_cpy = Tokenizer.init(self.src[self.idx..]);
+        return self_cpy.next();
+    }
+
     pub fn next(self: *Tokenizer) SourceToken {
         var result: SourceToken = .{
             .tok = undefined,
