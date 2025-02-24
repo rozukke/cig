@@ -21,6 +21,9 @@ The coolest C compiler in town... he even smokes.
 Built by following Nora Sandler's "Writing a C Compiler" book using Zig.
 
 ## Usage
+> [!IMPORTANT]
+> Supports Linux and MacOS. Tested on Ubuntu 24.04 x86_64.
+
 To run on a C source file, you can use the below command:
 
 ```bash
